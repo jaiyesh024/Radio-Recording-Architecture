@@ -29,7 +29,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
               resources = {
                 requests = {
-                  storage = "50Gi"
+                  storage = "50Gi"           # peristant storage and maintain historical records incase of prometheus restart.
                 }
               }
             }
