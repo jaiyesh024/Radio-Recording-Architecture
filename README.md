@@ -1,10 +1,40 @@
-# Radio-Recording-Architecture
-Infrastructure design for continuously recording audio from a dynamic list of radio station URLs and writing the output to object storage, built to run 24/7 and scale from 20+ to 100 stations with a config change, not a redeploy of new code.
+# Radio Recording Architecture
 
-## Contents
-```
-├── README.md                  — this file
-├── terraform/                 — all infrastructure as code (AWS reference implementation)
+Infrastructure design for a resilient, continuously running radio recording platform.
+
+The system records audio streams from a dynamic list of radio station URLs, stores the resulting audio segments in object storage, and provides monitoring to detect recording gaps and infrastructure failures.
+
+The design is intended to run continuously (24/7), support multiple radio stations, and scale from tens of stations to 100+ with minimal operational effort.
+
+---
+
+## Architecture Overview
+
+This implementation uses:
+
+- **AWS** as the cloud provider
+- **Amazon EKS** for Kubernetes orchestration
+- **Terraform** for infrastructure provisioning
+- **Amazon S3** for durable audio storage
+- **Amazon ECR** for the recorder container image
+- **Prometheus / Grafana** for monitoring and alerting
+- **Kubernetes Deployments** to provide one recorder workload per radio station
+- **Cluster Autoscaler** to automatically increase or decrease Kubernetes node capacity
+
+The recording application itself is assumed to be a pre-built binary supplied by the platform/application team. This solution does not attempt to implement the recording software.
+
+Although the reference implementation uses AWS/EKS, the core recorder workload is Kubernetes-based. The Kubernetes workload could therefore be adapted to another Kubernetes platform if required.
+
+---
+
+## Repository Structure
+
+```text
+Radio-Recording-Architecture/
+│
+├── README.md
+│
+├── terraform/
 │   ├── versions.tf
 │   ├── providers.tf
 │   ├── variables.tf
@@ -12,64 +42,318 @@ Infrastructure design for continuously recording audio from a dynamic list of ra
 │   ├── eks.tf
 │   ├── s3.tf
 │   ├── iam.tf
-│   ├── recorder.tf            — the per-station Deployments (the core of requirement 3)
+│   ├── recorder.tf
 │   ├── autoscaler.tf
 │   ├── monitoring.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
-├── kubernetes/
-│   └── example-recorder-deployment.yaml   — one manifest, standalone, for reference/review
+│
+├── k8s/
+│   └── example-recorder-deployment.yaml
+│
 └── monitoring/
-    └── alerts.yaml             — PrometheusRule: gap detection + supporting alerts
+    └── alerts.yaml
+
+terraform/ is the primary source of truth for the infrastructure and Kubernetes resources.
+
+The Kubernetes manifest is provided as an example/reference manifest showing the recorder workload independently of Terraform.
 ```
+
+## High-Level Architecture
+
 ```
-                    Internet
-                       ▲
+                         Internet
+                            │
+                            │
+                  ┌─────────▼─────────┐
+                  │  Radio Stations   │
+                  │   Stream URLs     │
+                  └─────────▲─────────┘
+                            │
+                     Outbound HTTPS/
+                       HTTP streams
+                            │
+                     NAT Gateway
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+        Private Subnet A            Private Subnet B
+              │                           │
+          EKS Nodes                   EKS Nodes
+              │                           │
+        ┌─────┴─────┐               ┌─────┴─────┐
+        │ Recorder  │               │ Recorder  │
+        │   Pods    │               │   Pods    │
+        └─────┬─────┘               └─────┬─────┘
+              │                           │
+              └─────────────┬─────────────┘
+                            │
+                            ▼
+                    Amazon S3 Bucket
+                    Audio Segments
+                            │
+                            ▼
+                    Downstream System
+
+```
+The recorder pods run in private EKS subnets.
+
+They establish outbound connections to the configured radio streams through the NAT Gateway and write completed audio segments to S3.
+
+S3 provides durable storage that can be consumed independently by downstream processing systems.
+
+
+## One Recorder Deployment Per Station
+Each configured station is represented by one Kubernetes Deployment.
+
+```
+                         EKS
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+     recorder-A      recorder-B      recorder-C
+          │               │               │
+       Radio A          Radio B          Radio C
+       stream           stream           stream
+
+```
+Terraform uses for_each over the configured station map:
+
+```
+resource "kubernetes_deployment" "recorder" {
+  for_each = var.stations
+  ...
+}
+```
+
+This means that adding a station does not require creating another Kubernetes manifest manually.
+
+For example:
+```
+20 stations
+    │
+    ▼
+20 recorder Deployments
+
+100 stations
+    │
+    ▼
+100 recorder Deployments
+```
+
+## Station Configuration
+
+The current reference implementation stores the desired station configuration in:
+```
+var.stations
+```
+
+A station contains at least:
+```
+station ID
+station URL
+```
+
+Eg:
+```
+stations = {
+  radio_a = {
+    url = "https://example.com/radio-a"
+  }
+
+  radio_b = {
+    url = "https://example.com/radio-b"
+  }
+}
+```
+Adding or removing a station therefore becomes a configuration change followed by:
+```
+terraform apply
+```
+Note : No application code or Kubernetes manifest needs to be manually modified.
+
+## Recording Strategy
+
+The recorder is assumed to produce fixed-duration audio segments rather than maintaining one indefinitely growing audio file.
+
+The default configuration uses:
+```
+5 minute segments
+```
+Eg:
+```
+Radio stream
+     │
+     ▼
+┌───────────┐
+│ Segment 1 │  00:00 - 05:00
+└───────────┘
+     │
+     ▼
+     S3
+
+┌───────────┐
+│ Segment 2 │  05:00 - 10:00
+└───────────┘
+     │
+     ▼
+     S3
+
+┌───────────┐
+│ Segment 3 │  10:00 - 15:00
+└───────────┘
+     │
+     ▼
+     S3
+```
+
+## S3 Storage
+
+Audio recordings are stored in an S3 bucket.
+
+Objects are logically partitioned by station and recording time.
+
+```
+s3://radio-recordings/
+    station-a/
+        2026/
+            09/
+                29/
+                    22/
+                        segment-220000.mp3
+                        segment-220500.mp3
+                        segment-221000.mp3
+
+    station-b/
+        2026/
+            09/
+                29/
+                    22/
+                        segment-220000.mp3
+                        segment-220500.mp3
+```
+
+## Network Architecture
+
+The EKS worker nodes run in private subnets across multiple Availability Zones.
+
+```
+                    AWS VPC
                        │
-                 Radio stations
-                       ▲
-                       │
-                 NAT Gateway
-                       ▲
-          ┌────────────┼────────────┐
-          │            │            │
-      PrivateAZ-A   PrivateAZ-B   PrivateAZ-C
-          │            │            │
-       EKS nodes    EKS nodes    EKS nodes
-          │            │            │
-       Recorder     Recorder     Recorder
-        (pod)        (pod)         (pod)
-        
+        ┌──────────────┼──────────────┐
+        │              │              │
+     AZ-A           AZ-B           AZ-C
+        │              │              │
+   Private Subnet  Private Subnet  Private Subnet
+        │              │              │
+      EKS Nodes      EKS Nodes      EKS Nodes
+```
+Note:
+
+Recorder pods do not need public IP addresses.
+Outbound access to radio streams is provided through the NAT Gateway.
+
+## Resilience
+The system is designed to continue operating when individual components fail.
+
+### Recorder process failure
+
+Kubernetes restarts the recorder container.
+```
+Recorder process
+      │
+      X
+   crashes
+      │
+      ▼
+Kubernetes detects failure
+      │
+      ▼
+Container restarted
+```
+### Pod failure
+
+If a pod disappears, Kubernetes recreates it.
+
+### Node failure
+
+If an EKS worker node fails, Kubernetes can reschedule the recorder workload onto another available node, subject to cluster capacity.
+
+### Cluster capacity
+
+Cluster Autoscaler monitors pending pods and can increase node capacity when the existing nodes cannot accommodate additional recorder workloads.
+
+This is important when the number of stations increases significantly.
+
+### Scaling:
+There are two separate scaling problems:
+
+1. Application scaling
+
+Each station has its own recorder Deployment.
+```
+20 stations → approximately 20 recorder pods
+
+50 stations → approximately 50 recorder pods
+
+100 stations → approximately 100 recorder pods
+```
+Adding stations is primarily a configuration change.
+
+2. Infrastructure scaling
+
+As more recorder pods are created, Kubernetes may eventually require additional worker nodes.
+
+Cluster Autoscaler handles this by increasing the EKS node group capacity when pods cannot be scheduled due to insufficient resources.
+
+```
+More stations
+      │
+      ▼
+More recorder pods
+      │
+      ▼
+Insufficient node capacity
+      │
+      ▼
+Cluster Autoscaler
+      │
+      ▼
+More EKS nodes
 ```
 
-## One Deployment per station
+The node group has configurable minimum, desired and maximum sizes.
+
+## Monitoring
+
+Monitoring is split into two different concerns:
+
+### Infrastructure health
+
+Examples:
+
+    - Pod restarts
+    - Unschedulable pods
+    - Node capacity
+    - Kubernetes health
+
+### Recording health
+
+The most important signal is whether a station is actually producing recording segments.
+
+A pod being Running does not necessarily mean that useful audio is being recorded.
+
+Eg:
 ```
-                    EKS
-                     │
-        ┌────────────┼────────────┐
-        │            │            │
-   recorder-A   recorder-B   recorder-C
-        │            │            │
-    Radio A       Radio B       Radio C
-
-Note: if Radio B dies, then K8s restart B
+Pod = Running
+Container = Running
+        │
+        ▼
+But radio stream disconnected
+        │
+        ▼
+No new audio segments
+        │
+        ▼
+Recording gap
 ```
-
-
-1. **Station registry**
-The desired state (which URLs should be recording), expressed here as a Terraform variable (`var.stations`); in production this would more naturally be a small database table, with Terraform reading it via a data source, or a generated `.tfvars` file from a CI step.
-
-2. **Terraform** diffs that list against what's running and creates/deletes one Kubernetes `Deployment` per station accordingly, via `for_each`.
-3. Each **recorder pod** wraps the pre-built recording binary, writes segmented audio (bounding data loss on a crash to one segment), and is self-healing - `restartPolicy: Always` plus a liveness probe means Kubernetes restarts a crashed process or reschedules it on a new node.
-   
-5. Segments upload to **S3**, partitioned `bucket/station_id/date/hour/segment.ext`, with lifecycle rules tiering older audio to cheaper storage classes.
-
-6. **Monitoring** watches for recording gaps (a station going stale), pod restarts, upstream URL reachability, and storage growth.
-
-## Recording strategy
-The binary is assumed to write fixed-duration segments (5 minutes, configurable) rather than one continuous file for the life of the stream:
-
-- **Bounded blast radius** — a crash loses at most one in-progress segment, not the whole session.
-- **No large local disk needed** — each completed segment uploads to S3 as soon as it closes; the pod only ever buffers one segment locally (`emptyDir` is enough).
-
-
