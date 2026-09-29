@@ -1,0 +1,59 @@
+# Standalone reference manifest for a single recorder pod — equivalent to
+# what terraform/recorder.tf generates for one entry in var.stations.
+# Shown here as plain YAML for quick review; the Terraform version is what's
+# actually applied (it's generated for every station via `for_each`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recorder-station-042
+  namespace: radio-recorders
+  labels:
+    app: recorder
+    station_id: "042"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      station_id: "042"
+  template:
+    metadata:
+      labels:
+        app: recorder
+        station_id: "042"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: recorder
+      restartPolicy: Always
+      containers:
+        - name: recorder
+          image: internal/radio-recorder:latest
+          env:
+            - name: STATION_ID
+              value: "042"
+            - name: STATION_URL
+              value: "https://example-radio-stream.com/station-042"
+            - name: OUTPUT_PREFIX
+              value: "s3://radio-recordings-audio/042"
+            - name: SEGMENT_DURATION_SECONDS
+              value: "300"
+            - name: AWS_REGION
+              value: "eu-west-2"
+          ports:
+            - containerPort: 9090
+              name: metrics
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "250m", memory: "256Mi" }
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep recorder"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: segment-buffer
+              mountPath: /var/recorder/buffer
+      volumes:
+        - name: segment-buffer
+          emptyDir: {}

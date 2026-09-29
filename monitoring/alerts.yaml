@@ -1,0 +1,52 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: radio-recorder-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: radio-recorder.rules
+      rules:
+
+        - alert: RecordingGap
+          expr: |
+            (time() - last_segment_write_timestamp)
+              > (2 * ${segment_duration_seconds})
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Recording gap for station {{ $labels.station_id }}"
+            description: >-
+              Station {{ $labels.station_id }} has not produced a new
+              recording segment within twice the expected segment interval.
+
+        - alert: RecorderRestartingFrequently
+          expr: |
+            increase(
+              kube_pod_container_status_restarts_total{
+                namespace="radio-recorders"
+              }[30m]
+            ) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Recorder restarting frequently"
+            description: >-
+              Recorder pod for station {{ $labels.station_id }}
+              has restarted more than 3 times in the last 30 minutes.
+
+        - alert: RecorderPodsUnschedulable
+          expr: |
+            kube_pod_status_unschedulable{
+              namespace="radio-recorders"
+            } == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Recorder pod is unschedulable"
+            description: >-
+              A recorder pod has remained unschedulable for more than
+              10 minutes. Check cluster capacity and Cluster Autoscaler.

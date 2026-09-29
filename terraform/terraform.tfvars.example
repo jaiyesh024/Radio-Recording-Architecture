@@ -1,0 +1,17 @@
+# This is the "station registry" for this reference implementation — scaling
+# from 20 to 100 stations means adding entries here and running
+# `terraform apply`. No other file needs to change.
+
+aws_region             = "eu-west-2"
+cluster_name           = "radio-recorder"
+environment            = "prod"
+recordings_bucket_name = "radio-recordings-audio-yourcompany" # must be globally unique
+recorder_image         = "123456789012.dkr.ecr.eu-west-2.amazonaws.com/radio-recorder:latest"
+grafana_admin_password = "REPLACE_ME"
+
+stations = {
+  "001" = { url = "https://example-radio-stream.com/station-001" }
+  "002" = { url = "https://example-radio-stream.com/station-002" }
+  "003" = { url = "https://example-radio-stream.com/station-003" }
+  # ... add up to 100+ entries here as needed
+}

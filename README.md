@@ -22,6 +22,39 @@ Infrastructure design for continuously recording audio from a dynamic list of ra
 └── monitoring/
     └── alerts.yaml             — PrometheusRule: gap detection + supporting alerts
 ```
+```
+                    Internet
+                       ▲
+                       │
+                 Radio stations
+                       ▲
+                       │
+                 NAT Gateway
+                       ▲
+          ┌────────────┼────────────┐
+          │            │            │
+      PrivateAZ-A   PrivateAZ-B   PrivateAZ-C
+          │            │            │
+       EKS nodes    EKS nodes    EKS nodes
+          │            │            │
+       Recorder     Recorder     Recorder
+        (pod)        (pod)         (pod)
+        
+```
+
+## One Deployment per station
+```
+                    EKS
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+   recorder-A   recorder-B   recorder-C
+        │            │            │
+    Radio A       Radio B       Radio C
+
+Note: if Radio B dies, then K8s restart B
+```
+
 
 1. **Station registry**
 The desired state (which URLs should be recording), expressed here as a Terraform variable (`var.stations`); in production this would more naturally be a small database table, with Terraform reading it via a data source, or a generated `.tfvars` file from a CI step.
@@ -38,3 +71,5 @@ The binary is assumed to write fixed-duration segments (5 minutes, configurable)
 
 - **Bounded blast radius** — a crash loses at most one in-progress segment, not the whole session.
 - **No large local disk needed** — each completed segment uploads to S3 as soon as it closes; the pod only ever buffers one segment locally (`emptyDir` is enough).
+
+
