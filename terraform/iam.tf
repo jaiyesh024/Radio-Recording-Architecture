@@ -38,7 +38,7 @@ data "aws_iam_policy_document" "recorder_s3_access" {
       "s3:PutObject",
       "s3:GetObject",
     ]
-    resources = ["${aws_s3_bucket.recordings.arn}/recordings/*"]       #object ARN
+    resources = ["${aws_s3_bucket.recordings.arn}/*"]       #object ARN
   }
 
   statement {
