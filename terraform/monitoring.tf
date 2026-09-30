@@ -13,44 +13,44 @@ resource "helm_release" "kube_prometheus_stack" {
   version          = "58.2.1"
 
   values = [
-  yamlencode({
-    grafana = {
-      adminPassword = var.grafana_admin_password
-    }
+    yamlencode({
+      grafana = {
+        adminPassword = var.grafana_admin_password
+      }
 
-    prometheus = {
-      prometheusSpec = {
-        retention = "15d"
+      prometheus = {
+        prometheusSpec = {
+          retention = "15d"
 
-        # Only select the PodMonitor created below for recorder metrics.
-        podMonitorSelector = {
-          matchLabels = {
-            monitoring = "radio-recorder"
+          # Only select the PodMonitor created below for recorder metrics.
+          podMonitorSelector = {
+            matchLabels = {
+              monitoring = "radio-recorder"
+            }
           }
-        }
-        # PodMonitor itself lives in the monitoring namespace.
-        podMonitorNamespaceSelector = {
-          matchNames = ["monitoring"]
-        }
+          # PodMonitor itself lives in the monitoring namespace.
+          podMonitorNamespaceSelector = {
+            matchNames = ["monitoring"]
+          }
 
-        storageSpec = {
-          volumeClaimTemplate = {
-            spec = {
-              accessModes = ["ReadWriteOnce"]
+          storageSpec = {
+            volumeClaimTemplate = {
+              spec = {
+                accessModes = ["ReadWriteOnce"]
 
-              resources = {
-                requests = {
-                  storage = "50Gi"           # peristant storage and maintain historical records incase of prometheus restart.
+                resources = {
+                  requests = {
+                    storage = "50Gi" # persistent storage to retain Prometheus data across restarts.
+                  }
                 }
               }
             }
           }
-        }
 
-        ruleSelectorNilUsesHelmValues = false
+          ruleSelectorNilUsesHelmValues = false
+        }
       }
-    }
-  })
+    })
   ]
 }
 
@@ -58,42 +58,42 @@ resource "helm_release" "kube_prometheus_stack" {
 #The PodMonitor selects pods in the radio-recorders namespace using the "app = recorder" label and scrapes their named "metrics" port.
 
 resource "kubernetes_manifest" "recorder_pod_monitor" {
-manifest = {
-apiVersion = "monitoring.coreos.com/v1"
-kind = "PodMonitor"
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "PodMonitor"
 
-metadata = {
-  name      = "radio-recorder"
-  namespace = "monitoring"
+    metadata = {
+      name      = "radio-recorder"
+      namespace = "monitoring"
 
-  labels = {
-    monitoring = "radio-recorder"
-  }
-}
-
-spec = {
-  namespaceSelector = {
-    matchNames = ["radio-recorders"]
-  }
-
-  selector = {
-    matchLabels = {
-      app = "recorder"
+      labels = {
+        monitoring = "radio-recorder"
+      }
     }
+
+    spec = {
+      namespaceSelector = {
+        matchNames = ["radio-recorders"]
+      }
+
+      selector = {
+        matchLabels = {
+          app = "recorder"
+        }
+      }
+
+      podMetricsEndpoints = [
+        {
+          port     = "metrics"
+          path     = "/metrics"
+          interval = "30s"
+        }
+      ]
+    }
+
   }
 
-  podMetricsEndpoints = [
-    {
-      port     = "metrics"
-      path     = "/metrics"
-      interval = "30s"
-    }
-  ]
-}
-
-}
-
-depends_on = [helm_release.kube_prometheus_stack]
+  depends_on = [helm_release.kube_prometheus_stack]
 }
 
 # Recording-gap and recorder health alerts.
