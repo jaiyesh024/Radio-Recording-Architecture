@@ -79,10 +79,10 @@ Each configured station is represented by one Kubernetes Deployment.
                           │
           ┌───────────────┼───────────────┐
           │               │               │
-     recorder-A      recorder-B      recorder-C
+     recorder-A      recorder-B         recorder-C
           │               │               │
-       Radio A          Radio B          Radio C
-       stream           stream           stream
+       Radio A          Radio B         Radio C
+       stream           stream          stream
 
 ```
 Terraform uses for_each over the configured station map:
@@ -210,7 +210,7 @@ The EKS worker nodes run in private subnets across multiple Availability Zones.
                        │
         ┌──────────────┼──────────────┐
         │              │              │
-     AZ-A           AZ-B           AZ-C
+      AZ-A            AZ-B           AZ-C
         │              │              │
    Private Subnet  Private Subnet  Private Subnet
         │              │              │
