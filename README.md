@@ -61,42 +61,8 @@ The Kubernetes manifest is provided as an example/reference manifest showing the
 
 ## High-Level Architecture
 
-```
-                         Internet
-                            │
-                            │
-                  ┌─────────▼─────────┐
-                  │  Radio Stations   │
-                  │   Stream URLs     │
-                  └─────────▲─────────┘
-                            │
-                     Outbound HTTPS/
-                       HTTP streams
-                            │
-                     NAT Gateway
-                            │
-              ┌─────────────┴─────────────┐
-              │                           │
-        Private Subnet A            Private Subnet B
-              │                           │
-          EKS Nodes                   EKS Nodes
-              │                           │
-        ┌─────┴─────┐               ┌─────┴─────┐
-        │ Recorder  │               │ Recorder  │
-        │   Pods    │               │   Pods    │
-        └─────┬─────┘               └─────┬─────┘
-              │                           │
-              └─────────────┬─────────────┘
-                            │
-                            ▼
-                    Amazon S3 Bucket
-                    Audio Segments
-                            │
-                            ▼
-                    Downstream System
+<img width="539" height="686" alt="image" src="https://github.com/user-attachments/assets/834f7575-f453-4fcc-8ff9-d83793daf058" />
 
-```
-<img width="583" height="543" alt="image" src="https://github.com/user-attachments/assets/0bd8bf83-04fb-4396-873b-28b6a471f516" />
 
 The recorder pods run in private EKS subnets.
 
