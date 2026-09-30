@@ -38,15 +38,15 @@ Radio-Recording-Architecture/
 │   ├── versions.tf
 │   ├── providers.tf
 │   ├── variables.tf
-│   ├── vpc.tf
-│   ├── eks.tf
-│   ├── s3.tf
-│   ├── iam.tf
-│   ├── recorder.tf
-│   ├── autoscaler.tf
-│   ├── monitoring.tf
-│   ├── outputs.tf
-│   └── terraform.tfvars.example
+│   ├── vpc.tf             # vpc & submets
+│   ├── eks.tf             # EKS cluster, managed node group and ECR
+│   ├── s3.tf              # Store Recording 
+│   ├── iam.tf             # IRSA & S3 permission
+│   ├── recorder.tf        # One recorder Deployment per station
+│   ├── autoscaler.tf      # Cluster Autoscaler
+│   ├── monitoring.tf      # Prometheus?grafana and POD monitor
+│   ├── outputs.tf         # Terraform outputs
+│   └── terraform.tfvars.example     # Env configuration
 │
 ├── k8s/
 │   └── example-recorder-deployment.yaml
