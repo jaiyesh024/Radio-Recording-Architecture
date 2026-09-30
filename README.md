@@ -96,6 +96,8 @@ The Kubernetes manifest is provided as an example/reference manifest showing the
                     Downstream System
 
 ```
+<img width="583" height="543" alt="image" src="https://github.com/user-attachments/assets/0bd8bf83-04fb-4396-873b-28b6a471f516" />
+
 The recorder pods run in private EKS subnets.
 
 They establish outbound connections to the configured radio streams through the NAT Gateway and write completed audio segments to S3.
