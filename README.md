@@ -79,6 +79,7 @@ Each configured station is represented by one Kubernetes Deployment.
                           │
           ┌───────────────┼───────────────┐
           │               │               │
+          V               V               V
      recorder-A      recorder-B         recorder-C
           │               │               │
        Radio A          Radio B         Radio C
@@ -98,15 +99,11 @@ This means that adding a station does not require creating another Kubernetes ma
 
 For example:
 ```
-20 stations
-    │
-    ▼
-20 recorder Deployments
+20 stations                             100 stations
+    │                                        |
+    V                                        V
+20 recorder Deployments             100 recorder Deployments
 
-100 stations
-    │
-    ▼
-100 recorder Deployments
 ```
 
 ## Station Configuration
@@ -152,26 +149,24 @@ Eg:
 ```
 Radio stream
      │
-     ▼
-┌───────────┐
-│ Segment 1 │  00:00 - 05:00
-└───────────┘
+     V
+┌───────────┐                                
+│ Segment 1 │  00:00 - 05:00               
+└───────────┘                                
      │
-     ▼
+     V
      S3
-
 ┌───────────┐
 │ Segment 2 │  05:00 - 10:00
 └───────────┘
      │
-     ▼
+     V
      S3
-
 ┌───────────┐
 │ Segment 3 │  10:00 - 15:00
 └───────────┘
      │
-     ▼
+     V
      S3
 ```
 
@@ -211,10 +206,12 @@ The EKS worker nodes run in private subnets across multiple Availability Zones.
         ┌──────────────┼──────────────┐
         │              │              │
       AZ-A            AZ-B           AZ-C
-        │              │              │
+        |              │              │
+        V              V              V 
    Private Subnet  Private Subnet  Private Subnet
         │              │              │
-      EKS Nodes      EKS Nodes      EKS Nodes
+        V              V              V
+       EKS Nodes      EKS Nodes      EKS Nodes
 ```
 Note:
 
