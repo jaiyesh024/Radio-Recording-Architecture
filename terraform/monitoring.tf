@@ -22,6 +22,17 @@ resource "helm_release" "kube_prometheus_stack" {
       prometheusSpec = {
         retention = "15d"
 
+        # Only select the PodMonitor created below for recorder metrics.
+        podMonitorSelector = {
+          matchLabels = {
+            monitoring = "radio-recorder"
+          }
+        }
+        # PodMonitor itself lives in the monitoring namespace.
+        podMonitorNamespaceSelector = {
+          matchNames = ["monitoring"]
+        }
+
         storageSpec = {
           volumeClaimTemplate = {
             spec = {
@@ -42,6 +53,50 @@ resource "helm_release" "kube_prometheus_stack" {
   })
   ]
 }
+
+#Explicitly tells Prometheus Operator to scrape all recorder pods.
+#The PodMonitor selects pods in the radio-recorders namespace using the "app = recorder" label and scrapes their named "metrics" port.
+
+resource "kubernetes_manifest" "recorder_pod_monitor" {
+manifest = {
+apiVersion = "monitoring.coreos.com/v1"
+kind = "PodMonitor"
+
+metadata = {
+  name      = "radio-recorder"
+  namespace = "monitoring"
+
+  labels = {
+    monitoring = "radio-recorder"
+  }
+}
+
+spec = {
+  namespaceSelector = {
+    matchNames = ["radio-recorders"]
+  }
+
+  selector = {
+    matchLabels = {
+      app = "recorder"
+    }
+  }
+
+  podMetricsEndpoints = [
+    {
+      port     = "metrics"
+      path     = "/metrics"
+      interval = "30s"
+    }
+  ]
+}
+
+}
+
+depends_on = [helm_release.kube_prometheus_stack]
+}
+
+# Recording-gap and recorder health alerts.
 
 resource "kubernetes_manifest" "recording_gap_alerts" {
   manifest = yamldecode(templatefile("${path.module}/../monitoring/alerts.yaml", {
