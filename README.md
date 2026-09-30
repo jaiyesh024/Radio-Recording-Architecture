@@ -63,39 +63,6 @@ The Kubernetes manifest is provided as an example/reference manifest showing the
 
 <img width="539" height="686" alt="image" src="https://github.com/user-attachments/assets/834f7575-f453-4fcc-8ff9-d83793daf058" />
 
-flowchart LR
-    Internet(("Internet")) --> NATGW["NAT Gateway"]
-
-    subgraph PrivateNetwork["Private Network"]
-        direction TB
-        subgraph SubnetA["Private Subnet A"]
-            direction TB
-            EKSNodeA["EKS Node A"]
-        end
-        subgraph SubnetB["Private Subnet B"]
-            direction TB
-            EKSNodeB["EKS Node B"]
-        end
-    end
-
-    NATGW --> EKSNodeA
-    NATGW --> EKSNodeB
-    EKSNodeA -->|"writes data"| S3[("Amazon S3")]
-    EKSNodeB -->|"writes data"| S3
-
-    classDef external fill:#ecfeff,stroke:#22d3ee,color:#0f172a;
-    classDef gateway fill:#fff7ed,stroke:#fb923c,color:#0f172a;
-    classDef private fill:#f0fdf4,stroke:#4ade80,color:#0f172a;
-    classDef compute fill:#eef2ff,stroke:#818cf8,color:#0f172a;
-    classDef storage fill:#f5f3ff,stroke:#a78bfa,color:#0f172a;
-
-    class Internet external;
-    class NATGW gateway;
-    class SubnetA,SubnetB private;
-    class EKSNodeA,EKSNodeB compute;
-    class S3 storage;
-
-
 The recorder pods run in private EKS subnets.
 
 They establish outbound connections to the configured radio streams through the NAT Gateway and write completed audio segments to S3.
